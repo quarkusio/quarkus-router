@@ -1,4 +1,4 @@
-package io.quarkus.router;
+package io.quarkus.router.defaultroute;
 
 import java.io.IOException;
 
@@ -10,6 +10,8 @@ import org.apache.http.util.EntityUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
+import io.quarkus.router.Route;
+import io.quarkus.router.Router;
 import io.quarkus.router.util.AbstractRouterTest;
 import io.quarkus.router.util.TestRouteHandler;
 
@@ -17,11 +19,8 @@ public class DefaultRouteTestCase extends AbstractRouterTest {
 
     @Override
     protected void setupRouter(Router router) {
-        RouterRegistration registration = router.createRegistration("test", new TestRouteHandler(201, ""));
-        router.setDefaultRoute(registration);
-
-        registration = router.createRegistration("test2", new TestRouteHandler(200, "foo"));
-        router.addRoute(registration, Route.builder("/foo").build());
+        router.setDefaultRoute(new TestRouteHandler(201, ""));
+        router.addRoute(Route.builder("/foo").build(), new TestRouteHandler(200, "foo"));
     }
 
     @Test
@@ -36,7 +35,5 @@ public class DefaultRouteTestCase extends AbstractRouterTest {
             response = client.execute(get);
             Assertions.assertEquals(201, response.getStatusLine().getStatusCode());
         }
-
-
     }
 }

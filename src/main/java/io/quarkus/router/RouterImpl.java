@@ -1,5 +1,6 @@
 package io.quarkus.router;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -15,11 +16,6 @@ class RouterImpl implements Router {
 
     private final List<FilterHolder> filters = new CopyOnWriteArrayList<>();
     private final PathMatcher<PathDataHolder> routes = new PathMatcher<>();
-
-    @Override
-    public RouterRegistration createRegistration(String name, Consumer<Channel> connectionCallback) {
-        return new RouterRegistrationImpl(connectionCallback, name);
-    }
 
     RouterRegistrationImpl select(HttpRequest request) {
         for (int i = 0; i < filters.size(); ++i) {
@@ -75,8 +71,8 @@ class RouterImpl implements Router {
     }
 
     @Override
-    public Router addFilter(RouterRegistration registration, Predicate<HttpRequest> filter) {
-        RouterRegistrationImpl c = (RouterRegistrationImpl) registration;
+    public Closeable addFilter(Predicate<HttpRequest> filter, Consumer<Channel> callback) {
+        RouterRegistrationImpl c = new RouterRegistrationImpl(callback);
         FilterHolder holder = new FilterHolder(c, filter);
         this.filters.add(holder);
         c.closeTasks.add(new Runnable() {
@@ -85,12 +81,12 @@ class RouterImpl implements Router {
                 filters.remove(holder);
             }
         });
-        return this;
+        return c;
     }
 
     @Override
-    public Router addRoute(RouterRegistration registration, Route route) {
-        RouterRegistrationImpl c = (RouterRegistrationImpl) registration;
+    public Closeable addRoute(Route route, Consumer<Channel> callback) {
+        RouterRegistrationImpl c = new RouterRegistrationImpl(callback);
         PathDataHolder holder = null;
         if (route.isExact()) {
             holder = routes.getExactPath(route.getPath());
@@ -109,7 +105,7 @@ class RouterImpl implements Router {
         PathDataHolder finalHolder = holder;
         if (route.getMethod() != null) {
             List<RouteHolder> routes = holder.routesByMethod.computeIfAbsent(HttpMethod.valueOf(route.getMethod()), (k) -> new CopyOnWriteArrayList<>());
-            RouteHolder rh = new RouteHolder(route, (RouterRegistrationImpl) registration);
+            RouteHolder rh = new RouteHolder(route, c);
             routes.add(rh);
             c.closeTasks.add(new Runnable() {
                 @Override
@@ -118,7 +114,7 @@ class RouterImpl implements Router {
                 }
             });
         } else {
-            RouteHolder rh = new RouteHolder(route, (RouterRegistrationImpl) registration);
+            RouteHolder rh = new RouteHolder(route, c);
             holder.defaultRoutes.add(rh);
             c.closeTasks.add(new Runnable() {
                 @Override
@@ -127,13 +123,12 @@ class RouterImpl implements Router {
                 }
             });
         }
-        return null;
+        return c;
     }
 
     @Override
-    public Router setDefaultRoute(RouterRegistration registration) {
-        addRoute(registration, Route.builder("/").build());
-        return this;
+    public Closeable setDefaultRoute(Consumer<Channel> callback) {
+        return addRoute(Route.builder("/").build(), callback);
     }
 
     static class PathDataHolder {
@@ -165,24 +160,15 @@ class RouterImpl implements Router {
         }
     }
 
-    class RouterRegistrationImpl implements RouterRegistration {
+    class RouterRegistrationImpl implements Closeable {
 
         final Consumer<Channel> callback;
-        final String name;
         final List<Runnable> closeTasks = new ArrayList<>();
 
-        private RouterRegistrationImpl(Consumer<Channel> callback, String name) {
+        private RouterRegistrationImpl(Consumer<Channel> callback) {
             this.callback = callback;
-            this.name = name;
         }
 
-
-        @Override
-        public String getName() {
-            return name;
-        }
-
-        @Override
         public void close() {
             for (Runnable i : closeTasks) {
                 i.run();

@@ -65,7 +65,6 @@ public class TestRouteHandler implements Consumer<Channel> {
 
             @Override
             public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-                super.channelRead(ctx, msg);
                 if (msg instanceof HttpRequest) {
                     request = (HttpRequest) msg;
                     buffer = new ByteArrayOutputStream();

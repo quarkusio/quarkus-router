@@ -1,5 +1,6 @@
 package io.quarkus.router;
 
+import java.io.Closeable;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -23,29 +24,17 @@ import io.netty.handler.codec.http.HttpRequest;
  * Any predicates on the matching route are evaluated. If one of them returns false then this route is rejected, and the
  * next most specific route is considered instead.
  * <p>
- * If no routes are matched then the channel set by {@link #setDefaultRoute(RouterRegistration)} is used.
+ * If no routes are matched then the channel set by {@link #setDefaultRoute(Consumer)} is used.
  * <p>
  * - Handlers are then matched on path. If there is an exact path mapping then this takes
  */
 public interface Router {
 
-    /**
-     * Creates a router registration for use by the router.
-     *
-     * For any given connection the provided callback is guaranteed to be invoked once (and only once per connection)
-     * before any requests are routed to the virtual channel.
-     *
-     * @param name The name of the registration, used for debugging purposes
-     * @param connectionCallback The callback that is invoked on connection
-     * @return A registration in the router
-     */
-    RouterRegistration createRegistration(String name, Consumer<Channel> connectionCallback);
+    Closeable addFilter(Predicate<HttpRequest> filter, Consumer<Channel> connectionCallback);
 
-    Router addFilter(RouterRegistration registration, Predicate<HttpRequest> filter);
+    Closeable addRoute(Route route, Consumer<Channel> connectionCallback);
 
-    Router addRoute(RouterRegistration registration, Route route);
-
-    Router setDefaultRoute(RouterRegistration registration);
+    Closeable setDefaultRoute(Consumer<Channel> connectionCallback);
 
     static Router newInstance() {
         return new RouterImpl();
