@@ -29,7 +29,7 @@ class RouterImpl implements Router {
             }
         }
         PathMatcher.PathMatch<PathDataHolder> match = routes.match(request.uri());
-        if (match == null) {
+        if (match.getValue() == null) {
             return null;
         }
         for (; ; ) {

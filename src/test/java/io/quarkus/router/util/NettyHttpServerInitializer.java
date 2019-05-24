@@ -12,22 +12,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package io.quarkus.router;
-
-import javax.net.ssl.SSLEngine;
+package io.quarkus.router.util;
 
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.codec.http.HttpServerCodec;
+import io.quarkus.router.util.RouterTestExtension;
 
 public class NettyHttpServerInitializer extends ChannelInitializer<SocketChannel> {
-
 
     @Override
     public void initChannel(SocketChannel ch) {
         ChannelPipeline p = ch.pipeline();
-        SSLEngine engine = null;
         p.addLast(new HttpServerCodec());
         p.addLast(RouterTestExtension.createCodec());
     }

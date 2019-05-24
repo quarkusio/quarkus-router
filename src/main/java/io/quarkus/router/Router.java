@@ -47,4 +47,8 @@ public interface Router {
 
     Router setDefaultRoute(RouterRegistration registration);
 
+    static Router newInstance() {
+        return new RouterImpl();
+    }
+
 }

@@ -1,4 +1,4 @@
-package io.quarkus.router;
+package io.quarkus.router.util;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -15,6 +15,8 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.quarkus.router.Router;
+import io.quarkus.router.RouterHttp11Decoder;
 
 public class RouterTestExtension implements BeforeAllCallback {
 
@@ -36,9 +38,9 @@ public class RouterTestExtension implements BeforeAllCallback {
         return HOST;
     }
 
-    public static URI uri() {
+    public static URI uri(String path) {
         try {
-            return new URI("http://" + host() + ":" + port());
+            return new URI("http://" + host() + ":" + port() + (path.startsWith("/") ? path : ("/" + path)));
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }

@@ -1,4 +1,4 @@
-package io.quarkus.router;
+package io.quarkus.router.util;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
