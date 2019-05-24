@@ -32,7 +32,7 @@ public class DefaultRouteTestCase extends AbstractRouterTest{
                         super.channelRead(ctx, msg);
                         if (msg instanceof LastHttpContent) {
                             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CREATED);
-                            ctx.channel().write(response);
+                            ctx.channel().writeAndFlush(response);
                         }
                     }
                 });

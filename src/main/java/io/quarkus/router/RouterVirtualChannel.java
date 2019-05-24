@@ -27,6 +27,7 @@ import io.netty.channel.EventLoop;
 import io.netty.channel.RecvByteBufAllocator;
 import io.netty.channel.VoidChannelPromise;
 import io.netty.handler.codec.http.HttpObject;
+import io.netty.handler.codec.http.LastHttpContent;
 import io.netty.handler.codec.http2.Http2Frame;
 import io.netty.handler.codec.http2.Http2MultiplexCodec;
 import io.netty.util.Attribute;
@@ -49,7 +50,7 @@ public class RouterVirtualChannel implements Channel {
     private final RouterHttp11Decoder decoder;
     
     private volatile boolean registered;
-    private Queue<Object> inboundBuffer = new ArrayDeque<>();
+    private Queue<Object> inboundBuffer;
 
 
     // Currently the child channel and parent channel are always on the same EventLoop thread. This allows us to
@@ -234,28 +235,42 @@ public class RouterVirtualChannel implements Channel {
 
     @Override
     public ChannelFuture write(Object msg) {
-        return pipeline().write(msg);
+        ChannelFuture write = parent.pipeline().write(msg);
+        postWrite(msg);
+        return write;
     }
 
     @Override
     public ChannelFuture write(Object msg, ChannelPromise promise) {
-        return pipeline().write(msg, promise);
+        ChannelFuture write = parent.pipeline().write(msg, promise);
+        postWrite(msg);
+        return write;
     }
 
     @Override
     public Channel flush() {
-        pipeline().flush();
+        parent.pipeline().flush();
         return this;
     }
 
     @Override
     public ChannelFuture writeAndFlush(Object msg, ChannelPromise promise) {
-        return pipeline().writeAndFlush(msg, promise);
+        ChannelFuture channelFuture = parent.pipeline().writeAndFlush(msg, promise);
+        postWrite(msg);
+        return channelFuture;
     }
 
     @Override
     public ChannelFuture writeAndFlush(Object msg) {
-        return pipeline().writeAndFlush(msg);
+        ChannelFuture channelFuture = parent.pipeline().writeAndFlush(msg);
+        postWrite(msg);
+        return channelFuture;
+    }
+
+    private void postWrite(Object msg) {
+        if(msg instanceof LastHttpContent) {
+            decoder.activeChannelComplete();
+        }
     }
 
     @Override

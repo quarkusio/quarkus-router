@@ -6,6 +6,9 @@ import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.DefaultFullHttpResponse;
@@ -13,16 +16,20 @@ import io.netty.handler.codec.http.HttpObject;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.LastHttpContent;
-import io.netty.handler.codec.http2.Http2MultiplexCodec;
 
 /**
  * handler that routes incoming HTTP requests
- *
+ * <p>
  * This class maintains thread safety by delegating all operations to the registered event loop group
- *
  */
 public class RouterHttp11Decoder extends SimpleChannelInboundHandler<HttpObject> {
 
+    private static final ChannelFutureListener CHILD_CHANNEL_REGISTRATION_LISTENER = new ChannelFutureListener() {
+        @Override
+        public void operationComplete(ChannelFuture future) {
+            registerDone(future);
+        }
+    };
     private static final Logger logger = Logger.getLogger(RouterHttp11Decoder.class.getName());
 
     private RouterVirtualChannel activeChannel;
@@ -105,7 +112,7 @@ public class RouterHttp11Decoder extends SimpleChannelInboundHandler<HttpObject>
         childChannel.next = childChannel.previous = null;
     }
 
-    final void onChannelReadComplete(ChannelHandlerContext ctx)  {
+    final void onChannelReadComplete(ChannelHandlerContext ctx) {
         // If we have many child channel we can optimize for the case when multiple call flush() in
         // channelReadComplete(...) callbacks and only do it once as otherwise we will end-up with multiple
         // write calls on the socket which is expensive.
@@ -144,28 +151,35 @@ public class RouterHttp11Decoder extends SimpleChannelInboundHandler<HttpObject>
 
     private void handleHttpMessage(HttpObject msg) {
         if (msg instanceof HttpRequest) {
-            if(activeChannel != null) {
+            if (activeChannel != null) {
                 currentRequestDone = true;
                 queuedData.add(msg);
             } else {
                 HttpRequest request = (HttpRequest) msg;
                 RouterImpl.RouterRegistrationImpl result = router.select(request);
-                if(result == null) {
+                if (result == null) {
                     DefaultFullHttpResponse notFound = new DefaultFullHttpResponse(request.protocolVersion(), HttpResponseStatus.NOT_FOUND);
                     ctx.channel().write(notFound);
                     return;
                 }
-                RouterVirtualChannel existing = channelMap.get(result);
-                if(existing == null) {
-                    existing = new RouterVirtualChannel(ctx.pipeline().channel(), this);
-                    result.callback.accept(existing);
-                    channelMap.put(result, existing);
+                RouterVirtualChannel channel = channelMap.get(result);
+                if (channel == null) {
+                    channel = new RouterVirtualChannel(ctx.pipeline().channel(), this);
+
+                    ChannelFuture future = ctx.channel().eventLoop().register(channel);
+                    if (future.isDone()) {
+                        registerDone(future);
+                    } else {
+                        future.addListener(CHILD_CHANNEL_REGISTRATION_LISTENER);
+                    }
+                    result.callback.accept(channel);
+                    channelMap.put(result, channel);
                 }
-                activeChannel = existing;
-                existing.fireChildRead(msg);
+                activeChannel = channel;
+                channel.fireChildRead(msg);
             }
         } else if (activeChannel != null) {
-            if(currentRequestDone) {
+            if (currentRequestDone) {
                 queuedData.add(msg);
             } else {
                 if (msg instanceof LastHttpContent) {
@@ -178,8 +192,22 @@ public class RouterHttp11Decoder extends SimpleChannelInboundHandler<HttpObject>
         }
     }
 
+    private static void registerDone(ChannelFuture future) {
+        // Handle any errors that occurred on the local thread while registering. Even though
+        // failures can happen after this point, they will be handled by the channel by closing the
+        // childChannel.
+        if (!future.isSuccess()) {
+            Channel childChannel = future.channel();
+            if (childChannel.isRegistered()) {
+                childChannel.close();
+            } else {
+                childChannel.unsafe().closeForcibly();
+            }
+        }
+    }
+
     void activeChannelComplete() {
-        if(ctx.channel().eventLoop().inEventLoop()) {
+        if (ctx.channel().eventLoop().inEventLoop()) {
             activeChannel = null;
             currentRequestDone = false;
             while (!queuedData.isEmpty() && !currentRequestDone) {
