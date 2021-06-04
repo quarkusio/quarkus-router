@@ -17,7 +17,7 @@
         <jboss-logging.version>3.3.2.Final</jboss-logging.version>
         <netty-all.version>4.1.34.Final</netty-all.version>
         <junit.version>5.3.1</junit.version>
-        <httpcomponents.version>4.5.7</httpcomponents.version>
+        <httpcomponents.version>4.5.13</httpcomponents.version>
     </properties>
 
     <dependencies>
